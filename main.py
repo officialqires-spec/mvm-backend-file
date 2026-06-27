@@ -4,6 +4,13 @@ from sqlalchemy.orm import Session
 import models, schemas
 from database import engine, SessionLocal
 import datetime
+# 🛑 ATOMIC FIX: Import password hashing library
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 # Create Database Tables
 models.Base.metadata.create_all(bind=engine)
@@ -48,10 +55,13 @@ def create_student(student: schemas.StudentCreate, db: Session = Depends(get_db)
     if db_student:
         raise HTTPException(status_code=400, detail="Student ID already exists")
     
+    # 🛑 ATOMIC FIX: Hash the password before saving to DB
+    hashed_password = get_password_hash(student.password)
+    
     new_student = models.Student(
         id=student.id, name=student.name, class_name=student.class_name,
         section=student.section, phone=student.phone, father=student.father,
-        email=student.email, password=student.password, status=student.status
+        email=student.email, password=hashed_password, status=student.status
     )
     db.add(new_student)
     db.commit()
@@ -69,9 +79,20 @@ def update_student(student_id: str, student: schemas.StudentCreate, db: Session 
     db_student.phone = student.phone
     db_student.father = student.father
     db_student.email = student.email
-    db_student.password = student.password
+    
+    # 🛑 Only hash and update if a new password is provided
+    if student.password and not student.password.startswith("$2b$"): 
+        db_student.password = get_password_hash(student.password)
+    else:
+        db_student.password = student.password
+
+    # 🛑 ATOMIC FIX: Sync updated name to all relational ledgers
+    db.query(models.FeeLedger).filter(models.FeeLedger.student_id == student_id).update({"student_name": student.name})
+    db.query(models.HomeworkSubmission).filter(models.HomeworkSubmission.student_id == student_id).update({"student_name": student.name})
+    db.query(models.DisciplineLog).filter(models.DisciplineLog.student_id == student_id).update({"student_name": student.name})
+    
     db.commit()
-    return {"message": "Student Updated"}
+    return {"message": "Student & Related Ledgers Updated"}
 
 # ==========================================
 # 👨‍💼 STAFF APIs (Connected to HR Dashboard)
