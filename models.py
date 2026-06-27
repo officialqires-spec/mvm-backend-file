@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, Float, Text, Date, Time, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, Text, Date, Time, ForeignKey, DateTime
 from database import Base
+import datetime
 
 # ==========================================
 # 🏫 1. CORE USER MODELS (Admin, HR, Student)
@@ -37,9 +38,9 @@ class Staff(Base):
 
 class FeeLedger(Base):
     __tablename__ = "fee_ledger"
-    # Matches 'fee_bills_db' (Main Account)
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, index=True)
+    # 🛑 ATOMIC FIX: Foreign Key with Cascade Delete (Zombie Data Prevention)
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), index=True)
     student_name = Column(String)
     total_payable = Column(Integer, default=0)
     paid = Column(Integer, default=0)
@@ -47,12 +48,12 @@ class FeeLedger(Base):
 
 class FeeTransaction(Base):
     __tablename__ = "fee_transactions"
-    # Matches the 'history' array inside 'fee_bills_db'
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, index=True)
-    date = Column(String)
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    # 🛑 ATOMIC FIX: Proper DateTime for financial analytics
+    date = Column(DateTime, default=datetime.datetime.utcnow)
     amount = Column(Integer)
-    mode = Column(String) # Cash, UPI, Card
+    mode = Column(String) 
     receipt_no = Column(String)
 
 class PettyCash(Base):
@@ -80,11 +81,11 @@ class StaffAttendance(Base):
 
 class StudentAttendance(Base):
     __tablename__ = "student_attendance"
-    # Matches 'attendanceDB'
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, index=True)
+    # 🛑 ATOMIC FIX: Foreign Key added
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), index=True)
     date = Column(String)
-    status = Column(String) # P, A, L
+    status = Column(String) 
     marked_by = Column(String)
 
 class LeaveRequest(Base):
@@ -126,20 +127,20 @@ class Homework(Base):
 
 class HomeworkSubmission(Base):
     __tablename__ = "homework_submissions"
-    # Matches 'hwList'
     id = Column(Integer, primary_key=True, index=True)
     homework_id = Column(String, index=True)
-    student_id = Column(String, index=True)
+    # 🛑 ATOMIC FIX: Foreign Key added
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), index=True)
     student_name = Column(String)
     attachment_link = Column(String)
     submission_date = Column(String)
 
 class StudentMarks(Base):
     __tablename__ = "student_marks"
-    # Matches 'schoolMarksDB'
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, index=True)
-    term = Column(String) # PA 1, Half Yearly
+    # 🛑 ATOMIC FIX: Foreign Key added
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    term = Column(String) 
     subject = Column(String)
     theory = Column(Integer, default=0)
     internal = Column(Integer, default=0)
@@ -161,11 +162,11 @@ class NoticeBoard(Base):
 
 class DisciplineLog(Base):
     __tablename__ = "discipline_logs"
-    # Matches 'disciplineLog'
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, index=True)
+    # 🛑 ATOMIC FIX: Foreign Key added
+    student_id = Column(String, ForeignKey("students.id", ondelete="CASCADE"), index=True)
     student_name = Column(String)
-    action = Column(String) # Warning, Suspension
+    action = Column(String) 
     reason = Column(Text)
     reported_by = Column(String)
     severity = Column(String)
