@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import models, schemas
 from database import engine, SessionLocal
-import datetime
+from datetime import datetime, date
+from apscheduler.schedulers.background import BackgroundScheduler
 # 🛑 ATOMIC FIX: Import password hashing library
 from passlib.context import CryptContext
 
@@ -16,6 +17,50 @@ def get_password_hash(password):
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="MVM School ERP Backend")
+
+# ==========================================
+# ⏱️ CRON JOB: AUTO-ABSENT SCHEDULER
+# ==========================================
+def auto_absent_job():
+    db = SessionLocal()
+    try:
+        today_date = date.today().isoformat() # Format: YYYY-MM-DD
+        
+        # 1. Sirf 'Active' staff ka data nikalo
+        active_staff = db.query(models.Staff).filter(models.Staff.status == "Active").all()
+        
+        for staff in active_staff:
+            # 2. Check karo ki aaj ki attendance record exist karti hai ya nahi
+            # ⚠️ Note: Ek baar confirm kar lena ki tumhare models.py me table ka naam 'Attendance' hi hai
+            existing_record = db.query(models.Attendance).filter(
+                models.Attendance.staff_id == staff.id,
+                models.Attendance.date == today_date
+            ).first()
+            
+            # 3. Agar attendance nahi mili, toh Auto-Absent (A) mark kar do
+            if not existing_record:
+                absent_record = models.Attendance(
+                    staff_id=staff.id,
+                    name=staff.name,
+                    date=today_date,
+                    time="Auto",
+                    status="A"
+                )
+                db.add(absent_record)
+        
+        db.commit()
+        print(f"✅ Auto-absent job executed successfully for {today_date}")
+    except Exception as e:
+        print(f"❌ Cron Job Error: {e}")
+    finally:
+        db.close()
+
+@app.on_event("startup")
+def start_scheduler():
+    scheduler = BackgroundScheduler()
+    # Roz dopahar 12:00 PM baje trigger hoga
+    scheduler.add_job(auto_absent_job, 'cron', hour=12, minute=0)
+    scheduler.start()
 
 # --- CORS SECURITY (Frontend ko connect hone ki permission) ---
 app.add_middleware(
